@@ -1,0 +1,17 @@
+Senior Backend Engineer — Distributed Systems
+
+We are looking for a Senior Backend Engineer to join our platform team. You will design and build high-throughput data pipelines, own our PostgreSQL infrastructure, and help migrate legacy services to Kubernetes on AWS.
+
+Responsibilities:
+- Design and implement backend services in Go and Python
+- Own the reliability and performance of our core data ingestion pipeline
+- Migrate services from monolithic architecture to Kubernetes-based microservices
+- Collaborate with the data team on PostgreSQL schema design and query optimization
+- Participate in on-call rotation and incident response
+
+Requirements:
+- 5+ years of backend engineering experience
+- Strong proficiency in Go or Python
+- Experience with PostgreSQL, Kubernetes, and AWS
+- Experience with distributed systems and message queues
+- Excellent communication skills
