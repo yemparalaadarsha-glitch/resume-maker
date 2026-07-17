@@ -99,6 +99,7 @@ def _merge_resume(master_resume: dict, tailored_content: dict) -> dict:
         "experience": merged_experience,
         "projects": merged_projects,
         "education": master_resume["education"],
+        "certifications": master_resume.get("certifications", []),
     }
 
 

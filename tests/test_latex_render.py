@@ -95,3 +95,31 @@ def test_render_resume_surfaces_unmatched_entries_and_falls_back_to_master_bulle
 
     assert pdf_path.exists()
     assert unmatched_entries == ["experience: Northwind Data", "project: queue-bench"]
+
+
+def test_render_resume_includes_certifications_when_present(tmp_path):
+    master_with_certs = {
+        **MASTER_RESUME,
+        "certifications": [
+            {"name": "GCP Cloud Architect", "credential": "credly.com/badges/abc-123"},
+            {"name": "Salesforce Certified Platform App Builder", "credential": "Credential ID 7910931"},
+        ],
+    }
+
+    pdf_path, _ = render_resume(master_with_certs, TAILORED_CONTENT, tmp_path)
+
+    tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
+    assert pdf_path.exists()
+    assert "Certifications" in tex_source
+    assert "GCP Cloud Architect" in tex_source
+    assert "credly.com/badges/abc-123" in tex_source
+    assert "Salesforce Certified Platform App Builder" in tex_source
+    assert "Credential ID 7910931" in tex_source
+
+
+def test_render_resume_omits_certifications_section_when_absent(tmp_path):
+    pdf_path, _ = render_resume(MASTER_RESUME, TAILORED_CONTENT, tmp_path)
+
+    tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
+    assert pdf_path.exists()
+    assert "Certifications" not in tex_source

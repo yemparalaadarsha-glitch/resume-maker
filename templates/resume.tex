@@ -48,4 +48,11 @@
 \textbf{\VAR{edu.degree}}, \VAR{edu.school} \hfill \VAR{edu.start} -- \VAR{edu.end} \\
 \BLOCK{endfor}
 
+\BLOCK{if certifications}
+\section*{Certifications}
+\BLOCK{for cert in certifications}
+\textbf{\VAR{cert.name}}\BLOCK{if cert.credential} \hfill \VAR{cert.credential}\BLOCK{endif} \\
+\BLOCK{endfor}
+\BLOCK{endif}
+
 \end{document}
