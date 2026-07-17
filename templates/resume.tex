@@ -1,0 +1,51 @@
+\documentclass[11pt]{article}
+\usepackage[margin=0.75in]{geometry}
+\usepackage{enumitem}
+\pagestyle{empty}
+\setlist[itemize]{leftmargin=*,itemsep=2pt,topsep=2pt,parsep=0pt}
+
+\begin{document}
+
+\begin{center}
+{\LARGE \VAR{contact.name}} \\
+\VAR{contact.email} \textbar{} \VAR{contact.phone} \textbar{} \VAR{contact.location}
+\BLOCK{if contact.links}
+\\ \BLOCK{for link in contact.links}\VAR{link}\BLOCK{if not loop.last} \textbar{} \BLOCK{endif}\BLOCK{endfor}
+\BLOCK{endif}
+\end{center}
+
+\section*{Summary}
+\VAR{summary}
+
+\section*{Experience}
+\BLOCK{for job in experience}
+\textbf{\VAR{job.title}}, \VAR{job.company} \hfill \VAR{job.location} \\
+\textit{\VAR{job.start} -- \VAR{job.end}}
+\begin{itemize}
+\BLOCK{for bullet in job.bullets}
+\item \VAR{bullet}
+\BLOCK{endfor}
+\end{itemize}
+\BLOCK{endfor}
+
+\BLOCK{if projects}
+\section*{Projects}
+\BLOCK{for project in projects}
+\textbf{\VAR{project.name}}\BLOCK{if project.tech} \hfill \VAR{project.tech|join(', ')}\BLOCK{endif}
+\begin{itemize}
+\BLOCK{for bullet in project.bullets}
+\item \VAR{bullet}
+\BLOCK{endfor}
+\end{itemize}
+\BLOCK{endfor}
+\BLOCK{endif}
+
+\section*{Skills}
+\VAR{skills|join(', ')}
+
+\section*{Education}
+\BLOCK{for edu in education}
+\textbf{\VAR{edu.degree}}, \VAR{edu.school} \hfill \VAR{edu.start} -- \VAR{edu.end} \\
+\BLOCK{endfor}
+
+\end{document}

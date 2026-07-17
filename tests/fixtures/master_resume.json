@@ -1,0 +1,41 @@
+{
+  "contact": {
+    "name": "Jordan Rivera",
+    "email": "jordan.rivera@example.com",
+    "phone": "555-123-4567",
+    "location": "Austin, TX",
+    "links": ["linkedin.com/in/jordanrivera"]
+  },
+  "summary": "Backend engineer with 5 years building distributed systems in Python and Go.",
+  "skills": ["Python", "Go", "PostgreSQL", "Kubernetes", "AWS"],
+  "experience": [
+    {
+      "company": "Northwind Data",
+      "title": "Senior Backend Engineer",
+      "location": "Austin, TX",
+      "start": "2022-01",
+      "end": "Present",
+      "bullets": [
+        "Rebuilt the ingestion pipeline in Go, cutting processing latency from 40 minutes to 6 minutes.",
+        "Migrated the primary datastore from MySQL to PostgreSQL with zero downtime for 2M daily active rows."
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "queue-bench",
+      "bullets": [
+        "Built an open-source benchmarking tool for comparing message queue throughput under load."
+      ],
+      "tech": ["Go", "Redis"]
+    }
+  ],
+  "education": [
+    {
+      "school": "University of Texas at Austin",
+      "degree": "B.S. Computer Science",
+      "start": "2014",
+      "end": "2018"
+    }
+  ]
+}
