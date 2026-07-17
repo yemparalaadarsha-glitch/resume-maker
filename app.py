@@ -125,7 +125,7 @@ def tailoring_flow(master_resume: dict):
 
         with st.spinner("Rendering PDF..."):
             try:
-                pdf_path, unmatched_entries = render_resume(master_resume, tailored_content, run_dir)
+                pdf_path, unmatched_entries, trimmed_entries = render_resume(master_resume, tailored_content, run_dir)
             except RenderError as e:
                 st.error(f"PDF rendering failed:\n\n{e}")
                 return
@@ -135,6 +135,12 @@ def tailoring_flow(master_resume: dict):
                 "Tailoring was silently dropped for these entries (no matching "
                 "company/name in the model's response, so the original bullets "
                 f"were used instead): {', '.join(unmatched_entries)}"
+            )
+
+        if trimmed_entries:
+            st.info(
+                "Some bullets were automatically trimmed to fit the resume within "
+                f"2 pages: {', '.join(trimmed_entries)}"
             )
 
         save_gap_analysis(run_dir, gap_analysis)

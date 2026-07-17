@@ -1,8 +1,10 @@
-\documentclass[11pt]{article}
-\usepackage[margin=0.75in]{geometry}
+\documentclass[10.5pt]{article}
+\usepackage[margin=0.6in]{geometry}
 \usepackage{enumitem}
+\usepackage{titlesec}
 \pagestyle{empty}
-\setlist[itemize]{leftmargin=*,itemsep=2pt,topsep=2pt,parsep=0pt}
+\setlist[itemize]{leftmargin=*,itemsep=1pt,topsep=1pt,parsep=0pt}
+\titlespacing*{\section}{0pt}{8pt}{4pt}
 
 \begin{document}
 
@@ -26,6 +28,7 @@
 \item \VAR{bullet}
 \BLOCK{endfor}
 \end{itemize}
+\BLOCK{if not loop.last}\vspace{3pt}\BLOCK{endif}
 \BLOCK{endfor}
 
 \BLOCK{if projects}
@@ -37,6 +40,7 @@
 \item \VAR{bullet}
 \BLOCK{endfor}
 \end{itemize}
+\BLOCK{if not loop.last}\vspace{3pt}\BLOCK{endif}
 \BLOCK{endfor}
 \BLOCK{endif}
 
