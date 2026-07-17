@@ -52,6 +52,29 @@ def _escape_context(value):
     return value
 
 
+def find_unmatched_entries(master_resume: dict, tailored_content: dict) -> list[str]:
+    """Return labels for master experience/project entries with no tailored match.
+
+    `_merge_resume` keys tailored experience by exact `company` string and
+    tailored projects by exact `name` string, falling back to the master
+    resume's original bullets when no match is found. That fallback is
+    silent by construction, so this function exists to make the mismatch
+    visible to callers (e.g. so `app.py` can show a warning) instead of the
+    tailoring being discarded with zero indication.
+    """
+    tailored_companies = {e["company"] for e in tailored_content.get("experience", [])}
+    tailored_names = {p["name"] for p in tailored_content.get("projects", [])}
+
+    unmatched = []
+    for job in master_resume.get("experience", []):
+        if job["company"] not in tailored_companies:
+            unmatched.append(f"experience: {job['company']}")
+    for project in master_resume.get("projects", []):
+        if project["name"] not in tailored_names:
+            unmatched.append(f"project: {project['name']}")
+    return unmatched
+
+
 def _merge_resume(master_resume: dict, tailored_content: dict) -> dict:
     tailored_by_company = {e["company"]: e for e in tailored_content.get("experience", [])}
     merged_experience = []
@@ -79,7 +102,16 @@ def _merge_resume(master_resume: dict, tailored_content: dict) -> dict:
     }
 
 
-def render_resume(master_resume: dict, tailored_content: dict, output_dir: Path) -> Path:
+def render_resume(master_resume: dict, tailored_content: dict, output_dir: Path) -> tuple[Path, list[str]]:
+    """Render the tailored resume to PDF.
+
+    Returns a tuple of (pdf_path, unmatched_entries), where unmatched_entries
+    lists master experience/project entries whose tailored counterpart could
+    not be matched by exact `company`/`name` and therefore fell back to the
+    original, untailored bullets. Callers should surface a warning to the
+    user when this list is non-empty.
+    """
+    unmatched_entries = find_unmatched_entries(master_resume, tailored_content)
     merged = _merge_resume(master_resume, tailored_content)
     escaped = _escape_context(merged)
 
@@ -103,4 +135,4 @@ def render_resume(master_resume: dict, tailored_content: dict, output_dir: Path)
     pdf_path = output_dir / "resume.pdf"
     if not pdf_path.exists():
         raise RenderError(f"Tectonic reported success but no PDF was produced at {pdf_path}")
-    return pdf_path
+    return pdf_path, unmatched_entries

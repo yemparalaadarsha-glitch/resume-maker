@@ -80,7 +80,11 @@ def tailoring_flow(master_resume: dict):
         resume_text = resume_to_text(master_resume)
 
         with st.spinner("Extracting keywords from the job description..."):
-            gap_analysis, kw_usage = extract_keywords(client, job_description, resume_text)
+            try:
+                gap_analysis, kw_usage = extract_keywords(client, job_description, resume_text)
+            except Exception as e:
+                st.error(f"Keyword extraction failed:\n\n{e}")
+                return
             log_usage(
                 "keyword_analysis", "claude-haiku-4-5",
                 kw_usage.input_tokens, kw_usage.output_tokens, USAGE_LOG_PATH,
@@ -98,9 +102,13 @@ def tailoring_flow(master_resume: dict):
         st.metric("Match score", f"{gap_analysis['match_percentage']}%")
 
         with st.spinner("Tailoring your resume..."):
-            tailored_content, tailor_usages = tailor_resume(
-                client, master_resume, job_description, gap_analysis, model=model
-            )
+            try:
+                tailored_content, tailor_usages = tailor_resume(
+                    client, master_resume, job_description, gap_analysis, model=model
+                )
+            except Exception as e:
+                st.error(f"Resume tailoring failed:\n\n{e}")
+                return
             for usage in tailor_usages:
                 log_usage(
                     "tailor", model, usage.input_tokens, usage.output_tokens, USAGE_LOG_PATH,
@@ -117,10 +125,17 @@ def tailoring_flow(master_resume: dict):
 
         with st.spinner("Rendering PDF..."):
             try:
-                pdf_path = render_resume(master_resume, tailored_content, run_dir)
+                pdf_path, unmatched_entries = render_resume(master_resume, tailored_content, run_dir)
             except RenderError as e:
                 st.error(f"PDF rendering failed:\n\n{e}")
                 return
+
+        if unmatched_entries:
+            st.warning(
+                "Tailoring was silently dropped for these entries (no matching "
+                "company/name in the model's response, so the original bullets "
+                f"were used instead): {', '.join(unmatched_entries)}"
+            )
 
         save_gap_analysis(run_dir, gap_analysis)
 

@@ -64,7 +64,8 @@ def test_full_pipeline_from_jd_to_compiled_pdf(tmp_path):
     violations = lint_resume_content(tailored_content)
     assert violations == {}
 
-    pdf_path = render_resume(MASTER_RESUME, tailored_content, tmp_path)
+    pdf_path, unmatched_entries = render_resume(MASTER_RESUME, tailored_content, tmp_path)
     assert pdf_path.exists()
     assert pdf_path.stat().st_size > 0
+    assert unmatched_entries == []
     assert client.messages.create.call_count == 3
