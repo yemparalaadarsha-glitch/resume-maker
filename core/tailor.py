@@ -112,8 +112,29 @@ def _run_json_call(client, model: str, system_prompt: str, content_blocks: list[
             f"Claude stopped with an unexpected stop_reason: {response.stop_reason!r}. Model: {model!r}."
         )
 
-    text = next(block.text for block in response.content if block.type == "text")
-    return json.loads(text), response.usage
+    # Structured-output responses are normally a single text block, but
+    # concatenate all of them rather than take just the first — taking only
+    # content[0] would silently drop the rest of the JSON on the rare
+    # response that splits output across multiple text blocks.
+    text = "".join(block.text for block in response.content if block.type == "text")
+
+    try:
+        return json.loads(text), response.usage
+    except json.JSONDecodeError as e:
+        # Seen in production: stop_reason reports "end_turn" (Claude
+        # believes it finished normally) yet the text isn't valid JSON — a
+        # different failure mode than a max_tokens truncation, so the
+        # stop_reason checks above don't catch it. Surface stop_reason,
+        # response length, and the actual text near the parse failure
+        # instead of a bare, contextless JSONDecodeError.
+        snippet_start = max(e.pos - 200, 0)
+        snippet_end = min(e.pos + 200, len(text))
+        raise TailorResponseError(
+            f"Claude's response (stop_reason={response.stop_reason!r}, "
+            f"{len(text)} chars) was not valid JSON: {e}\n"
+            f"Text near the parse failure (chars {snippet_start}-{snippet_end} "
+            f"of {len(text)}):\n{text[snippet_start:snippet_end]!r}"
+        ) from e
 
 
 def tailor_resume(

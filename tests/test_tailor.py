@@ -134,3 +134,51 @@ def test_tailor_resume_raises_clear_error_for_unexpected_stop_reason():
 
     with pytest.raises(TailorResponseError, match="refusal"):
         tailor_resume(client, MASTER_RESUME, "job description text", GAP_ANALYSIS)
+
+
+def test_tailor_resume_raises_diagnostic_error_when_json_invalid_despite_end_turn():
+    # Observed in production against claude-sonnet-5: stop_reason reports
+    # "end_turn" (Claude believes it finished normally) yet response.content
+    # is not valid JSON, so json.loads() raised a bare, contextless
+    # JSONDecodeError ("Unterminated string starting at: line 1 column N")
+    # that gave no way to diagnose what actually went wrong. The stop_reason
+    # checks above don't catch this case by design (stop_reason IS
+    # end_turn) — this is a different failure mode: the guard here is
+    # around the parse itself, surfacing stop_reason, response length, and
+    # the actual text near the parse failure instead of a bare traceback.
+    client = MagicMock()
+    malformed_text = '{"summary": "Backend engineer focused on distributed sys'
+    client.messages.create.side_effect = [
+        _fake_truncated_response(malformed_text, stop_reason="end_turn")
+    ]
+
+    with pytest.raises(TailorResponseError) as exc_info:
+        tailor_resume(client, MASTER_RESUME, "job description text", GAP_ANALYSIS)
+
+    message = str(exc_info.value)
+    assert "end_turn" in message
+    assert "distributed sys" in message  # actual response text, not just the parser error
+
+
+def test_tailor_resume_concatenates_multiple_text_blocks_before_parsing():
+    # Structured-output responses are normally a single text block, but
+    # taking only response.content[0] would silently drop the rest of the
+    # JSON if the model ever splits output across multiple text blocks.
+    client = MagicMock()
+    draft = {"summary": "draft", "experience": [], "projects": []}
+    final = {"summary": "final split across blocks", "experience": [], "projects": []}
+    final_json = json.dumps(final)
+    split_at = len(final_json) // 2
+    split_response = SimpleNamespace(
+        content=[
+            SimpleNamespace(type="text", text=final_json[:split_at]),
+            SimpleNamespace(type="text", text=final_json[split_at:]),
+        ],
+        usage=SimpleNamespace(input_tokens=1000, output_tokens=500),
+        stop_reason="end_turn",
+    )
+    client.messages.create.side_effect = [_fake_response(draft), split_response]
+
+    result, _ = tailor_resume(client, MASTER_RESUME, "job description text", GAP_ANALYSIS)
+
+    assert result == final
