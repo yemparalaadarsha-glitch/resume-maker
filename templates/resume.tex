@@ -1,62 +1,112 @@
-\documentclass[10.5pt]{article}
+\documentclass[\VAR{spacing.font_size}]{article}
+
 \usepackage[margin=0.6in]{geometry}
 \usepackage{enumitem}
 \usepackage{titlesec}
+\usepackage[hidelinks]{hyperref}
+\usepackage{tabularx}
+
 \pagestyle{empty}
-\setlist[itemize]{leftmargin=*,itemsep=1pt,topsep=1pt,parsep=0pt}
-\titlespacing*{\section}{0pt}{8pt}{4pt}
+\urlstyle{same}
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+\titleformat{\section}{\vspace{-4pt}\scshape\raggedright\large}{}{0em}{}[\titlerule \vspace{-5pt}]
+\titlespacing*{\section}{0pt}{\VAR{spacing.section_gap}}{4pt}
+
+\newcommand{\resumeItem}[1]{\item\small{#1 \vspace{-2pt}}}
+
+\newcommand{\resumeSubheading}[4]{%
+  \vspace{-2pt}\item
+    \begin{tabular*}{0.97\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & #2 \\
+      \textit{\small#3} & \textit{\small#4} \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{%
+  \item
+    \begin{tabular*}{0.97\textwidth}{l@{\extracolsep{\fill}}r}
+      \small#1 & \small#2 \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.15in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}[leftmargin=0.15in, itemsep=1pt, topsep=1pt, parsep=0pt]}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-5pt}}
 
 \begin{document}
 
 \begin{center}
-{\LARGE \VAR{contact.name}} \\
-\VAR{contact.email} \textbar{} \VAR{contact.phone} \textbar{} \VAR{contact.location}
-\BLOCK{if contact.links}
-\\ \BLOCK{for link in contact.links}\VAR{link}\BLOCK{if not loop.last} \textbar{} \BLOCK{endif}\BLOCK{endfor}
-\BLOCK{endif}
+  \textbf{\Huge \scshape \VAR{contact.name}} \\ \vspace{2pt}
+  \small
+  \BLOCK{for part in contact.header_parts}
+  \BLOCK{if part.type == 'link'}\href{\VAR{part.href}}{\underline{\VAR{part.label}}}\BLOCK{else}\VAR{part.label}\BLOCK{endif}\BLOCK{if not loop.last} $|$ \BLOCK{endif}
+  \BLOCK{endfor}
 \end{center}
 
-\section*{Summary}
-\VAR{summary}
-
-\section*{Experience}
-\BLOCK{for job in experience}
-\textbf{\VAR{job.title}}, \VAR{job.company} \hfill \VAR{job.location} \\
-\textit{\VAR{job.start} -- \VAR{job.end}}
-\begin{itemize}
-\BLOCK{for bullet in job.bullets}
-\item \VAR{bullet}
-\BLOCK{endfor}
-\end{itemize}
-\BLOCK{if not loop.last}\vspace{3pt}\BLOCK{endif}
-\BLOCK{endfor}
-
-\BLOCK{if projects}
-\section*{Projects}
-\BLOCK{for project in projects}
-\textbf{\VAR{project.name}}\BLOCK{if project.tech} \hfill \VAR{project.tech|join(', ')}\BLOCK{endif}
-\begin{itemize}
-\BLOCK{for bullet in project.bullets}
-\item \VAR{bullet}
-\BLOCK{endfor}
-\end{itemize}
-\BLOCK{if not loop.last}\vspace{3pt}\BLOCK{endif}
-\BLOCK{endfor}
+\BLOCK{if summary}
+\section{Summary}
+  \small \VAR{summary}
 \BLOCK{endif}
 
-\section*{Skills}
-\VAR{skills|join(', ')}
-
-\section*{Education}
-\BLOCK{for edu in education}
-\textbf{\VAR{edu.degree}}, \VAR{edu.school} \hfill \VAR{edu.start} -- \VAR{edu.end} \\
+\section{Experience}
+\resumeSubHeadingListStart
+\BLOCK{for job in experience}
+  \resumeSubheading
+    {\VAR{job.title}}{\VAR{job.start} -- \VAR{job.end}}
+    {\VAR{job.company}}{\VAR{job.location}}
+  \resumeItemListStart
+  \BLOCK{for bullet in job.bullets}
+    \resumeItem{\VAR{bullet}}
+  \BLOCK{endfor}
+  \resumeItemListEnd
+  \BLOCK{if not loop.last}\vspace{\VAR{spacing.entry_gap}}\BLOCK{endif}
 \BLOCK{endfor}
+\resumeSubHeadingListEnd
+
+\BLOCK{if projects}
+\section{Projects}
+\resumeSubHeadingListStart
+\BLOCK{for project in projects}
+  \resumeProjectHeading
+    {\textbf{\VAR{project.name}}\BLOCK{if project.tech} $|$ \emph{\VAR{project.tech|join(', ')}}\BLOCK{endif}}
+    {}
+  \resumeItemListStart
+  \BLOCK{for bullet in project.bullets}
+    \resumeItem{\VAR{bullet}}
+  \BLOCK{endfor}
+  \resumeItemListEnd
+  \BLOCK{if not loop.last}\vspace{\VAR{spacing.entry_gap}}\BLOCK{endif}
+\BLOCK{endfor}
+\resumeSubHeadingListEnd
+\BLOCK{endif}
+
+\section{Technical Skills}
+\begin{itemize}[leftmargin=0.15in, label={}]
+  \small{\item{\textbf{Skills:} \VAR{skills|join(', ')}}}
+\end{itemize}
+
+\section{Education}
+\resumeSubHeadingListStart
+\BLOCK{for edu in education}
+  \resumeSubheading
+    {\VAR{edu.degree}}{\VAR{edu.start} -- \VAR{edu.end}}
+    {\VAR{edu.school}}{}
+\BLOCK{endfor}
+\resumeSubHeadingListEnd
 
 \BLOCK{if certifications}
-\section*{Certifications}
+\section{Certifications}
+\resumeSubHeadingListStart
 \BLOCK{for cert in certifications}
-\textbf{\VAR{cert.name}}\BLOCK{if cert.credential} \hfill \VAR{cert.credential}\BLOCK{endif} \\
+  \resumeProjectHeading
+    {\textbf{\VAR{cert.name}}}
+    {\BLOCK{if cert.credential}\textit{\VAR{cert.credential}}\BLOCK{endif}}
 \BLOCK{endfor}
+\resumeSubHeadingListEnd
 \BLOCK{endif}
 
 \end{document}

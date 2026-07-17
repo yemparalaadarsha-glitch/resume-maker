@@ -14,6 +14,25 @@ MAX_PDF_PAGES = 2
 MIN_EXPERIENCE_BULLETS = 2
 MIN_PROJECT_BULLETS = 1
 
+# Ordered loosest -> tightest. Once content fits within MAX_PDF_PAGES at the
+# tightest preset, the loosest preset that still fits is used instead, so
+# leftover space on the last page reads as deliberate breathing room rather
+# than a sparse, half-filled trailing page. The loosest presets also bump
+# the base font size — a document-wide size increase absorbs slack more
+# naturally than stretching gaps alone would.
+SPACING_PRESETS = [
+    {"font_size": "12pt", "entry_gap": "16pt", "section_gap": "16pt"},
+    {"font_size": "12pt", "entry_gap": "10pt", "section_gap": "12pt"},
+    {"font_size": "12pt", "entry_gap": "5pt", "section_gap": "9pt"},
+    {"font_size": "12pt", "entry_gap": "3pt", "section_gap": "8pt"},
+    {"font_size": "11pt", "entry_gap": "16pt", "section_gap": "18pt"},
+    {"font_size": "11pt", "entry_gap": "12pt", "section_gap": "14pt"},
+    {"font_size": "11pt", "entry_gap": "8pt", "section_gap": "11pt"},
+    {"font_size": "11pt", "entry_gap": "5pt", "section_gap": "9pt"},
+    {"font_size": "11pt", "entry_gap": "3pt", "section_gap": "8pt"},
+]
+_TIGHT_SPACING = SPACING_PRESETS[-1]
+
 LATEX_JINJA_ENV = Environment(
     loader=FileSystemLoader(str(TEMPLATES_DIR)),
     block_start_string="\\BLOCK{",
@@ -54,14 +73,50 @@ def count_pdf_pages(pdf_path: Path) -> int:
     return len(PdfReader(str(pdf_path)).pages)
 
 
-def _escape_context(value):
+def _escape_context(value, _key=None):
     if isinstance(value, str):
+        # `href` values are real URLs, not printed text — hyperref's \href
+        # handles special characters in its URL argument itself, and running
+        # them through the text escaper would corrupt the link (e.g. an
+        # underscore becoming the literal 3 characters "\_" inside a mailto:
+        # or https:// URL). Only the paired `label` (the visible text) needs
+        # LaTeX escaping.
+        if _key == "href":
+            return value
         return escape_latex(value)
     if isinstance(value, list):
         return [_escape_context(v) for v in value]
     if isinstance(value, dict):
-        return {k: _escape_context(v) for k, v in value.items()}
+        return {k: _escape_context(v, _key=k) for k, v in value.items()}
     return value
+
+
+def _ensure_url_scheme(url: str) -> str:
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
+    return f"https://{url}"
+
+
+def _build_contact_context(contact: dict) -> dict:
+    """Flatten contact fields into an ordered, pipe-separated header line.
+
+    Each part is either plain text (phone, location) or a hyperlink (email
+    as mailto:, links with an https:// scheme added if missing) — kept as a
+    uniform list so the template can render one pipe-separated line without
+    hardcoding which fields are present.
+    """
+    header_parts = []
+    if contact.get("phone"):
+        header_parts.append({"type": "text", "label": contact["phone"]})
+    if contact.get("email"):
+        header_parts.append(
+            {"type": "link", "label": contact["email"], "href": f"mailto:{contact['email']}"}
+        )
+    if contact.get("location"):
+        header_parts.append({"type": "text", "label": contact["location"]})
+    for link in contact.get("links", []):
+        header_parts.append({"type": "link", "label": link, "href": _ensure_url_scheme(link)})
+    return {"name": contact["name"], "header_parts": header_parts}
 
 
 def find_unmatched_entries(master_resume: dict, tailored_content: dict) -> list[str]:
@@ -105,7 +160,7 @@ def _merge_resume(master_resume: dict, tailored_content: dict) -> dict:
         )
 
     return {
-        "contact": master_resume["contact"],
+        "contact": _build_contact_context(master_resume["contact"]),
         "summary": tailored_content.get("summary", master_resume["summary"]),
         "skills": master_resume["skills"],
         "experience": merged_experience,
@@ -115,10 +170,10 @@ def _merge_resume(master_resume: dict, tailored_content: dict) -> dict:
     }
 
 
-def _compile_pdf(merged: dict, output_dir: Path) -> Path:
+def _compile_pdf(merged: dict, output_dir: Path, spacing: dict = _TIGHT_SPACING) -> Path:
     escaped = _escape_context(merged)
     template = LATEX_JINJA_ENV.get_template("resume.tex")
-    tex_source = template.render(**escaped)
+    tex_source = template.render(spacing=spacing, **escaped)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     tex_path = output_dir / "resume.tex"
@@ -178,6 +233,20 @@ def _trim_label(merged: dict, kind: str, idx: int) -> str:
     return f"{kind}: {entry.get('name') or entry.get('company')}"
 
 
+def _loosest_fitting_render(merged: dict, output_dir: Path) -> Path:
+    """Render `merged` at the loosest spacing preset that still fits MAX_PDF_PAGES.
+
+    Precondition: `merged` already fits within MAX_PDF_PAGES at `_TIGHT_SPACING`
+    (the last, tightest preset in `SPACING_PRESETS`), so this loop is
+    guaranteed to succeed by the time it reaches that preset.
+    """
+    for spacing in SPACING_PRESETS:
+        pdf_path = _compile_pdf(merged, output_dir, spacing=spacing)
+        if count_pdf_pages(pdf_path) <= MAX_PDF_PAGES:
+            return pdf_path
+    raise AssertionError("no spacing preset fit — the tightest preset should always fit here")
+
+
 def _fit_to_page_limit(merged: dict, output_dir: Path) -> tuple[Path, list[str]]:
     """Render `merged`, trimming lowest-priority bullets until it fits MAX_PDF_PAGES.
 
@@ -187,10 +256,15 @@ def _fit_to_page_limit(merged: dict, output_dir: Path) -> tuple[Path, list[str]]
     assumed non-increasing as more bullets are removed, which holds for this
     single-column template. If even trimming every entry down to its floor
     still doesn't fit, the floor-trimmed version is used as a best effort.
+
+    Once the content that fits is settled (with or without trimming), a
+    second pass picks the loosest spacing preset that still fits — so any
+    leftover space on the last page becomes deliberate breathing room instead
+    of a sparse trailing gap.
     """
     pdf_path = _compile_pdf(merged, output_dir)
     if count_pdf_pages(pdf_path) <= MAX_PDF_PAGES:
-        return pdf_path, []
+        return _loosest_fitting_render(merged, output_dir), []
 
     removal_ops = _build_removal_ops(merged)
     if not removal_ops:
@@ -205,9 +279,9 @@ def _fit_to_page_limit(merged: dict, output_dir: Path) -> tuple[Path, list[str]]
         else:
             lo = mid + 1
 
-    final_pdf_path = _compile_pdf(_apply_removals(merged, removal_ops, lo), output_dir)
+    final_merged = _apply_removals(merged, removal_ops, lo)
     trimmed_labels = sorted({_trim_label(merged, kind, idx) for kind, idx in removal_ops[:lo]})
-    return final_pdf_path, trimmed_labels
+    return _loosest_fitting_render(final_merged, output_dir), trimmed_labels
 
 
 def render_resume(master_resume: dict, tailored_content: dict, output_dir: Path) -> tuple[Path, list[str], list[str]]:

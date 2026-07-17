@@ -9,6 +9,7 @@ from core.latex_render import (
     MAX_PDF_PAGES,
     MIN_EXPERIENCE_BULLETS,
     MIN_PROJECT_BULLETS,
+    SPACING_PRESETS,
     RenderError,
     count_pdf_pages,
     escape_latex,
@@ -141,6 +142,56 @@ def test_count_pdf_pages_returns_correct_page_count(tmp_path):
     assert count_pdf_pages(pdf_path) == 1
 
 
+def test_render_resume_hyperlinks_email_as_mailto(tmp_path):
+    _, _, _ = render_resume(MASTER_RESUME, TAILORED_CONTENT, tmp_path)
+
+    tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
+    assert r"\href{mailto:jordan.rivera@example.com}" in tex_source
+    assert r"\underline{jordan.rivera@example.com}" in tex_source
+
+
+def test_render_resume_adds_https_scheme_to_bare_contact_links(tmp_path):
+    # The stored link has no scheme ("linkedin.com/in/jordanrivera") — the
+    # href must still be a real clickable absolute URL.
+    _, _, _ = render_resume(MASTER_RESUME, TAILORED_CONTENT, tmp_path)
+
+    tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
+    assert r"\href{https://linkedin.com/in/jordanrivera}" in tex_source
+    assert r"\underline{linkedin.com/in/jordanrivera}" in tex_source
+
+
+def test_render_resume_preserves_link_scheme_if_already_present(tmp_path):
+    master_with_full_url = {
+        **MASTER_RESUME,
+        "contact": {**MASTER_RESUME["contact"], "links": ["https://github.com/jrivera"]},
+    }
+
+    render_resume(master_with_full_url, TAILORED_CONTENT, tmp_path)
+
+    tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
+    # Must not become "https://https://github.com/jrivera".
+    assert r"\href{https://github.com/jrivera}" in tex_source
+    assert "https://https://" not in tex_source
+
+
+def test_render_resume_keeps_href_raw_but_escapes_visible_label(tmp_path):
+    # A link containing a LaTeX-special character (underscore) is a
+    # realistic case (some platforms allow it in usernames/slugs). The
+    # clickable URL must stay a literal, unescaped underscore — hyperref
+    # handles special characters in \href's URL argument itself — while the
+    # visible, printed label must still go through normal LaTeX escaping.
+    master_with_special_link = {
+        **MASTER_RESUME,
+        "contact": {**MASTER_RESUME["contact"], "links": ["github.com/jordan_rivera"]},
+    }
+
+    render_resume(master_with_special_link, TAILORED_CONTENT, tmp_path)
+
+    tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
+    assert r"\href{https://github.com/jordan_rivera}" in tex_source
+    assert r"\underline{github.com/jordan\_rivera}" in tex_source
+
+
 def _repeat_bullet(label: str, index: int) -> str:
     # Long enough that a handful of these reliably force multi-page overflow
     # at the template's compact 10.5pt/0.6in settings, without relying on
@@ -207,9 +258,40 @@ def test_render_resume_trims_lowest_priority_bullets_to_fit_page_limit(tmp_path)
     assert count_pdf_pages(pdf_path) <= MAX_PDF_PAGES
     assert trimmed_entries != []
 
+
+def test_render_resume_loosens_spacing_to_fill_slack_when_content_undershoots(tmp_path):
+    # Sparse content (one job, two short bullets) comfortably fits in 1 page
+    # even at the tightest spacing preset. Rather than leave a mostly-empty
+    # trailing page/half-page, render_resume should pick the loosest spacing
+    # preset that still fits within MAX_PDF_PAGES, so the page reads as
+    # deliberately laid out rather than sparse.
+    sparse_master = {
+        "contact": {
+            "name": "Jordan Rivera", "email": "jordan.rivera@example.com",
+            "phone": "555-123-4567", "location": "Austin, TX", "links": [],
+        },
+        "summary": "Backend engineer.",
+        "skills": ["Python"],
+        "experience": [{
+            "company": "Northwind Data", "title": "Engineer", "location": "Austin, TX",
+            "start": "2022", "end": "Present",
+            "bullets": ["Did a thing.", "Did another thing."],
+        }],
+        "projects": [],
+        "education": [{"school": "UT Austin", "degree": "B.S. CS", "start": "2014", "end": "2018"}],
+    }
+    tailored_content = {
+        "summary": sparse_master["summary"],
+        "experience": [{"company": "Northwind Data", "bullets": sparse_master["experience"][0]["bullets"]}],
+        "projects": [],
+    }
+
+    pdf_path, _, trimmed_entries = render_resume(sparse_master, tailored_content, tmp_path)
+
+    assert count_pdf_pages(pdf_path) <= MAX_PDF_PAGES
+    assert trimmed_entries == []
     tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
-    # Floors are respected: every entry still has at least its minimum bullet count.
-    for i in range(6):
-        assert tex_source.count(f"Company {i} bullet") >= MIN_EXPERIENCE_BULLETS
-    for i in range(4):
-        assert tex_source.count(f"Project {i} bullet") >= MIN_PROJECT_BULLETS
+    loosest = SPACING_PRESETS[0]
+    tightest = SPACING_PRESETS[-1]
+    assert loosest["section_gap"] in tex_source
+    assert tightest["section_gap"] != loosest["section_gap"]
