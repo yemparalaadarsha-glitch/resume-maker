@@ -72,3 +72,24 @@ def test_tailor_resume_marks_master_resume_block_as_cacheable():
         assert content_blocks[0]["cache_control"] == {"type": "ephemeral"}
         assert "Northwind Data" in content_blocks[0]["text"]
         assert "cache_control" not in content_blocks[1]
+
+
+def test_tailor_resume_disables_thinking_and_gives_output_headroom():
+    # claude-sonnet-5 runs adaptive thinking by default when `thinking` is
+    # omitted, and max_tokens is a hard cap on thinking + output combined.
+    # For a full-size resume the model can burn the budget on invisible
+    # thinking tokens and truncate the JSON mid-string. Thinking is disabled
+    # explicitly since this call is a deterministic JSON transform, and
+    # max_tokens is raised well past the plan's original 4096 so a large
+    # resume (every experience/project bullet echoed back, per the system
+    # prompt) has room to complete even if thinking were ever re-enabled.
+    client = MagicMock()
+    empty = {"summary": "", "experience": [], "projects": []}
+    client.messages.create.side_effect = [_fake_response(empty), _fake_response(empty)]
+
+    tailor_resume(client, MASTER_RESUME, "job description text", GAP_ANALYSIS)
+
+    tailor_call, critique_call = client.messages.create.call_args_list
+    for call in (tailor_call, critique_call):
+        assert call.kwargs["thinking"] == {"type": "disabled"}
+        assert call.kwargs["max_tokens"] >= 8192
