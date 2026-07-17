@@ -4,6 +4,16 @@ from core.banned_phrases import BANNED_PHRASES
 
 DEFAULT_MODEL = "claude-sonnet-5"
 
+# Non-streaming default per Anthropic guidance: gives headroom for echoing
+# every experience/project bullet back in full on a large resume, per the
+# tailor system prompt's rules, without risking an SDK HTTP-timeout guard.
+TAILOR_MAX_TOKENS = 16000
+
+
+class TailorResponseError(Exception):
+    """Raised when Claude's response can't be used as-is (truncated or an
+    unexpected stop reason) instead of surfacing a bare JSONDecodeError."""
+
 TAILOR_SCHEMA = {
     "type": "object",
     "properties": {
@@ -85,18 +95,23 @@ def _build_content_blocks(stable_text: str, volatile_text: str) -> list[dict]:
 def _run_json_call(client, model: str, system_prompt: str, content_blocks: list[dict]):
     response = client.messages.create(
         model=model,
-        # max_tokens is a hard cap on thinking + output combined, and
-        # claude-sonnet-5 runs adaptive thinking by default when `thinking`
-        # is omitted (unlike Opus, which defaults to no-thinking). Thinking
-        # is disabled since this call is a deterministic JSON transform, and
-        # max_tokens is sized for echoing every experience/project bullet
-        # back in full on a large resume, per the system prompt's rules.
-        max_tokens=8192,
+        max_tokens=TAILOR_MAX_TOKENS,
         thinking={"type": "disabled"},
         system=system_prompt,
         output_config={"format": {"type": "json_schema", "schema": TAILOR_SCHEMA}},
         messages=[{"role": "user", "content": content_blocks}],
     )
+
+    if response.stop_reason == "max_tokens":
+        raise TailorResponseError(
+            f"Claude's response was truncated at the max_tokens limit "
+            f"({TAILOR_MAX_TOKENS}) before the JSON finished. Model: {model!r}."
+        )
+    if response.stop_reason not in ("end_turn", None):
+        raise TailorResponseError(
+            f"Claude stopped with an unexpected stop_reason: {response.stop_reason!r}. Model: {model!r}."
+        )
+
     text = next(block.text for block in response.content if block.type == "text")
     return json.loads(text), response.usage
 

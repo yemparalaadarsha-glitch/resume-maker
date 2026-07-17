@@ -17,6 +17,7 @@ def _fake_response(data: dict, input_tokens=1000, output_tokens=400):
     return SimpleNamespace(
         content=[SimpleNamespace(type="text", text=json.dumps(data))],
         usage=SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens),
+        stop_reason="end_turn",
     )
 
 

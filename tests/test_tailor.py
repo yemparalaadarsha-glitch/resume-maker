@@ -2,7 +2,9 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from core.tailor import tailor_resume
+import pytest
+
+from core.tailor import TailorResponseError, tailor_resume
 
 MASTER_RESUME = {
     "summary": "Backend engineer with 5 years building distributed systems.",
@@ -15,10 +17,19 @@ MASTER_RESUME = {
 GAP_ANALYSIS = {"keywords": ["Kubernetes"], "matched": [], "missing": ["Kubernetes"], "match_percentage": 0}
 
 
-def _fake_response(data: dict, input_tokens=1000, output_tokens=500):
+def _fake_response(data: dict, input_tokens=1000, output_tokens=500, stop_reason="end_turn"):
     return SimpleNamespace(
         content=[SimpleNamespace(type="text", text=json.dumps(data))],
         usage=SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens),
+        stop_reason=stop_reason,
+    )
+
+
+def _fake_truncated_response(partial_text: str, stop_reason: str):
+    return SimpleNamespace(
+        content=[SimpleNamespace(type="text", text=partial_text)],
+        usage=SimpleNamespace(input_tokens=1000, output_tokens=8192),
+        stop_reason=stop_reason,
     )
 
 
@@ -92,4 +103,34 @@ def test_tailor_resume_disables_thinking_and_gives_output_headroom():
     tailor_call, critique_call = client.messages.create.call_args_list
     for call in (tailor_call, critique_call):
         assert call.kwargs["thinking"] == {"type": "disabled"}
-        assert call.kwargs["max_tokens"] >= 8192
+        assert call.kwargs["max_tokens"] >= 16000
+
+
+def test_tailor_resume_raises_clear_error_when_response_truncated_at_max_tokens():
+    # A prior fix disabled thinking and raised max_tokens, but truncation
+    # recurred at an even shorter position — inconsistent with "still just
+    # running out of budget" (more budget should truncate later, not
+    # earlier). Rather than guess at a third max_tokens value blindly, make
+    # the failure mode legible: check stop_reason before attempting to parse,
+    # so the next occurrence (if any) reports plainly that generation was
+    # cut off at the token limit instead of surfacing a bare, unexplained
+    # JSONDecodeError.
+    client = MagicMock()
+    truncated_text = '{"summary": "Backend engineer focused on distributed sys'
+    client.messages.create.side_effect = [
+        _fake_truncated_response(truncated_text, stop_reason="max_tokens")
+    ]
+
+    with pytest.raises(TailorResponseError, match="max_tokens"):
+        tailor_resume(client, MASTER_RESUME, "job description text", GAP_ANALYSIS)
+
+
+def test_tailor_resume_raises_clear_error_for_unexpected_stop_reason():
+    client = MagicMock()
+    empty_text = json.dumps({"summary": "", "experience": [], "projects": []})
+    client.messages.create.side_effect = [
+        _fake_truncated_response(empty_text, stop_reason="refusal")
+    ]
+
+    with pytest.raises(TailorResponseError, match="refusal"):
+        tailor_resume(client, MASTER_RESUME, "job description text", GAP_ANALYSIS)
