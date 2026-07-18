@@ -14,12 +14,6 @@ MAX_PDF_PAGES = 2
 MIN_EXPERIENCE_BULLETS = 2
 MIN_PROJECT_BULLETS = 1
 
-# Single fixed layout — modest, professional spacing. (A prior version
-# searched for the loosest spacing that still fit the page cap, but that
-# produced oversized, uneven gaps right after the header; a normal amount
-# of whitespace on a trailing page reads as fine, so it's not worth chasing.)
-SPACING = {"font_size": "11pt", "entry_gap": "6pt", "section_gap": "10pt"}
-
 # Domains shown as a short, recognizable label instead of the raw URL —
 # saves header width and reads cleaner than a full link string.
 _FRIENDLY_LINK_LABELS = {
@@ -129,8 +123,9 @@ def _looks_like_url(text: str) -> bool:
 
 
 def _build_certifications_context(certifications: list[dict]) -> list[dict]:
-    """Turn a URL-like credential into a "Verify" hyperlink; leave non-URL
-    credentials (e.g. "Credential ID 7910931") as plain text."""
+    """Turn a URL-like credential into a hyperlink on the cert name itself;
+    leave non-URL credentials (e.g. "Credential ID 7910931") as plain text
+    shown alongside the name."""
     result = []
     for cert in certifications:
         credential = cert.get("credential", "")
@@ -138,7 +133,7 @@ def _build_certifications_context(certifications: list[dict]) -> list[dict]:
             result.append({
                 "name": cert["name"],
                 "credential_href": _ensure_url_scheme(credential),
-                "credential_label": "Verify",
+                "credential_label": None,
             })
         else:
             result.append({
@@ -203,7 +198,7 @@ def _merge_resume(master_resume: dict, tailored_content: dict) -> dict:
 def _compile_pdf(merged: dict, output_dir: Path) -> Path:
     escaped = _escape_context(merged)
     template = LATEX_JINJA_ENV.get_template("resume.tex")
-    tex_source = template.render(spacing=SPACING, **escaped)
+    tex_source = template.render(**escaped)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     tex_path = output_dir / "resume.tex"

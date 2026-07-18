@@ -121,12 +121,12 @@ def test_render_resume_hyperlinks_url_like_certification_credentials(tmp_path):
     tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
     assert pdf_path.exists()
     assert "Certifications" in tex_source
-    assert "GCP Cloud Architect" in tex_source
-    assert "Salesforce Certified Platform App Builder" in tex_source
-    # A URL-like credential becomes a real hyperlink...
-    assert r"\href{https://credly.com/badges/abc-123}{\ul{Verify}}" in tex_source
-    # ...but a non-URL credential (an ID, not a link) stays plain text, not a link.
+    # A URL-like credential becomes a hyperlink on the cert name itself...
+    assert r"\href{https://credly.com/badges/abc-123}{GCP Cloud Architect}" in tex_source
+    # ...but a non-URL credential (an ID, not a link) stays plain text, not a link,
+    # shown alongside the name instead.
     assert r"\href{Credential ID 7910931}" not in tex_source
+    assert "Salesforce Certified Platform App Builder (Credential ID 7910931)" in tex_source
     assert "Credential ID 7910931" in tex_source
 
 
@@ -149,7 +149,7 @@ def test_render_resume_hyperlinks_email_as_mailto(tmp_path):
 
     tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
     assert r"\href{mailto:jordan.rivera@example.com}" in tex_source
-    assert r"\ul{jordan.rivera@example.com}" in tex_source
+    assert r"\underline{jordan.rivera@example.com}" in tex_source
 
 
 def test_render_resume_adds_https_scheme_to_bare_contact_links(tmp_path):
@@ -190,8 +190,8 @@ def test_render_resume_uses_friendly_labels_for_known_link_domains(tmp_path):
     render_resume(master_with_links, TAILORED_CONTENT, tmp_path)
 
     tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
-    assert r"\href{https://github.com/jrivera}{\ul{GitHub}}" in tex_source
-    assert r"\href{https://linkedin.com/in/jordanrivera}{\ul{LinkedIn}}" in tex_source
+    assert r"\href{https://github.com/jrivera}{\underline{GitHub}}" in tex_source
+    assert r"\href{https://linkedin.com/in/jordanrivera}{\underline{LinkedIn}}" in tex_source
 
 
 def test_render_resume_keeps_href_raw_but_escapes_visible_label_for_unknown_domains(tmp_path):
@@ -210,7 +210,7 @@ def test_render_resume_keeps_href_raw_but_escapes_visible_label_for_unknown_doma
 
     tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
     assert r"\href{https://example.com/jordan_rivera}" in tex_source
-    assert r"\ul{example.com/jordan\_rivera}" in tex_source
+    assert r"\underline{example.com/jordan\_rivera}" in tex_source
 
 
 def _repeat_bullet(label: str, index: int) -> str:
