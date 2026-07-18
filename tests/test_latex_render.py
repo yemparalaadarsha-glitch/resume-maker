@@ -9,7 +9,6 @@ from core.latex_render import (
     MAX_PDF_PAGES,
     MIN_EXPERIENCE_BULLETS,
     MIN_PROJECT_BULLETS,
-    SPACING_PRESETS,
     RenderError,
     count_pdf_pages,
     escape_latex,
@@ -108,7 +107,7 @@ def test_render_resume_surfaces_unmatched_entries_and_falls_back_to_master_bulle
     assert unmatched_entries == ["experience: Northwind Data", "project: queue-bench"]
 
 
-def test_render_resume_includes_certifications_when_present(tmp_path):
+def test_render_resume_hyperlinks_url_like_certification_credentials(tmp_path):
     master_with_certs = {
         **MASTER_RESUME,
         "certifications": [
@@ -123,8 +122,11 @@ def test_render_resume_includes_certifications_when_present(tmp_path):
     assert pdf_path.exists()
     assert "Certifications" in tex_source
     assert "GCP Cloud Architect" in tex_source
-    assert "credly.com/badges/abc-123" in tex_source
     assert "Salesforce Certified Platform App Builder" in tex_source
+    # A URL-like credential becomes a real hyperlink...
+    assert r"\href{https://credly.com/badges/abc-123}{\ul{Verify}}" in tex_source
+    # ...but a non-URL credential (an ID, not a link) stays plain text, not a link.
+    assert r"\href{Credential ID 7910931}" not in tex_source
     assert "Credential ID 7910931" in tex_source
 
 
@@ -147,7 +149,7 @@ def test_render_resume_hyperlinks_email_as_mailto(tmp_path):
 
     tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
     assert r"\href{mailto:jordan.rivera@example.com}" in tex_source
-    assert r"\underline{jordan.rivera@example.com}" in tex_source
+    assert r"\ul{jordan.rivera@example.com}" in tex_source
 
 
 def test_render_resume_adds_https_scheme_to_bare_contact_links(tmp_path):
@@ -157,7 +159,6 @@ def test_render_resume_adds_https_scheme_to_bare_contact_links(tmp_path):
 
     tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
     assert r"\href{https://linkedin.com/in/jordanrivera}" in tex_source
-    assert r"\underline{linkedin.com/in/jordanrivera}" in tex_source
 
 
 def test_render_resume_preserves_link_scheme_if_already_present(tmp_path):
@@ -174,22 +175,42 @@ def test_render_resume_preserves_link_scheme_if_already_present(tmp_path):
     assert "https://https://" not in tex_source
 
 
-def test_render_resume_keeps_href_raw_but_escapes_visible_label(tmp_path):
-    # A link containing a LaTeX-special character (underscore) is a
-    # realistic case (some platforms allow it in usernames/slugs). The
+def test_render_resume_uses_friendly_labels_for_known_link_domains(tmp_path):
+    # Recruiters/ATS don't need to see the raw URL — a short "GitHub" /
+    # "LinkedIn" label reads cleaner and doesn't eat header width. The href
+    # still points at the real profile URL.
+    master_with_links = {
+        **MASTER_RESUME,
+        "contact": {
+            **MASTER_RESUME["contact"],
+            "links": ["github.com/jrivera", "linkedin.com/in/jordanrivera"],
+        },
+    }
+
+    render_resume(master_with_links, TAILORED_CONTENT, tmp_path)
+
+    tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
+    assert r"\href{https://github.com/jrivera}{\ul{GitHub}}" in tex_source
+    assert r"\href{https://linkedin.com/in/jordanrivera}{\ul{LinkedIn}}" in tex_source
+
+
+def test_render_resume_keeps_href_raw_but_escapes_visible_label_for_unknown_domains(tmp_path):
+    # A link on a domain we don't have a friendly label for falls back to
+    # showing the raw link text — including a LaTeX-special character
+    # (underscore), a realistic case some platforms allow in usernames. The
     # clickable URL must stay a literal, unescaped underscore — hyperref
     # handles special characters in \href's URL argument itself — while the
     # visible, printed label must still go through normal LaTeX escaping.
     master_with_special_link = {
         **MASTER_RESUME,
-        "contact": {**MASTER_RESUME["contact"], "links": ["github.com/jordan_rivera"]},
+        "contact": {**MASTER_RESUME["contact"], "links": ["example.com/jordan_rivera"]},
     }
 
     render_resume(master_with_special_link, TAILORED_CONTENT, tmp_path)
 
     tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
-    assert r"\href{https://github.com/jordan_rivera}" in tex_source
-    assert r"\underline{github.com/jordan\_rivera}" in tex_source
+    assert r"\href{https://example.com/jordan_rivera}" in tex_source
+    assert r"\ul{example.com/jordan\_rivera}" in tex_source
 
 
 def _repeat_bullet(label: str, index: int) -> str:
@@ -259,39 +280,3 @@ def test_render_resume_trims_lowest_priority_bullets_to_fit_page_limit(tmp_path)
     assert trimmed_entries != []
 
 
-def test_render_resume_loosens_spacing_to_fill_slack_when_content_undershoots(tmp_path):
-    # Sparse content (one job, two short bullets) comfortably fits in 1 page
-    # even at the tightest spacing preset. Rather than leave a mostly-empty
-    # trailing page/half-page, render_resume should pick the loosest spacing
-    # preset that still fits within MAX_PDF_PAGES, so the page reads as
-    # deliberately laid out rather than sparse.
-    sparse_master = {
-        "contact": {
-            "name": "Jordan Rivera", "email": "jordan.rivera@example.com",
-            "phone": "555-123-4567", "location": "Austin, TX", "links": [],
-        },
-        "summary": "Backend engineer.",
-        "skills": ["Python"],
-        "experience": [{
-            "company": "Northwind Data", "title": "Engineer", "location": "Austin, TX",
-            "start": "2022", "end": "Present",
-            "bullets": ["Did a thing.", "Did another thing."],
-        }],
-        "projects": [],
-        "education": [{"school": "UT Austin", "degree": "B.S. CS", "start": "2014", "end": "2018"}],
-    }
-    tailored_content = {
-        "summary": sparse_master["summary"],
-        "experience": [{"company": "Northwind Data", "bullets": sparse_master["experience"][0]["bullets"]}],
-        "projects": [],
-    }
-
-    pdf_path, _, trimmed_entries = render_resume(sparse_master, tailored_content, tmp_path)
-
-    assert count_pdf_pages(pdf_path) <= MAX_PDF_PAGES
-    assert trimmed_entries == []
-    tex_source = (tmp_path / "resume.tex").read_text(encoding="utf-8")
-    loosest = SPACING_PRESETS[0]
-    tightest = SPACING_PRESETS[-1]
-    assert loosest["section_gap"] in tex_source
-    assert tightest["section_gap"] != loosest["section_gap"]
