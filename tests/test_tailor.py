@@ -1,8 +1,9 @@
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from core.tailor import tailor_resume
+from core.tailor import tailor_resume, passthrough_tailored_content
 
 MASTER_RESUME = {
     "summary": "Backend engineer with 5 years building distributed systems.",
@@ -72,3 +73,29 @@ def test_tailor_resume_marks_master_resume_block_as_cacheable():
         assert content_blocks[0]["cache_control"] == {"type": "ephemeral"}
         assert "Northwind Data" in content_blocks[0]["text"]
         assert "cache_control" not in content_blocks[1]
+
+
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+FULL_MASTER_RESUME = json.loads((FIXTURES_DIR / "master_resume.json").read_text())
+
+
+def test_passthrough_tailored_content_mirrors_master_resume_bullets_unchanged():
+    result = passthrough_tailored_content(MASTER_RESUME)
+
+    assert result["summary"] == MASTER_RESUME["summary"]
+    assert result["experience"] == [
+        {"company": "Northwind Data", "bullets": ["Rebuilt the ingestion pipeline in Go."]}
+    ]
+    assert result["projects"] == [
+        {"name": "queue-bench", "bullets": ["Built a benchmarking tool."]}
+    ]
+
+
+def test_passthrough_tailored_content_round_trips_through_render_resume_with_no_unmatched(tmp_path):
+    from core.latex_render import render_resume
+
+    passthrough = passthrough_tailored_content(FULL_MASTER_RESUME)
+    pdf_path, unmatched_entries = render_resume(FULL_MASTER_RESUME, passthrough, tmp_path)
+
+    assert pdf_path.exists()
+    assert unmatched_entries == []

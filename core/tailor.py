@@ -37,6 +37,28 @@ TAILOR_SCHEMA = {
     "additionalProperties": False,
 }
 
+
+def passthrough_tailored_content(master_resume: dict) -> dict:
+    """Build a tailored-content-shaped dict from the master resume, unchanged.
+
+    Used for the "use original resume as-is" path, so it can be fed straight
+    into render_resume without a Claude call — the company/name keys match
+    exactly, so render_resume's merge is a no-op and unmatched_entries is
+    always empty.
+    """
+    return {
+        "summary": master_resume["summary"],
+        "experience": [
+            {"company": job["company"], "bullets": job["bullets"]}
+            for job in master_resume["experience"]
+        ],
+        "projects": [
+            {"name": project["name"], "bullets": project["bullets"]}
+            for project in master_resume.get("projects", [])
+        ],
+    }
+
+
 _BANNED_PHRASE_LIST = ", ".join(BANNED_PHRASES)
 
 TAILOR_SYSTEM_PROMPT = (
