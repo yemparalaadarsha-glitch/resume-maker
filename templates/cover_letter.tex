@@ -1,0 +1,26 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1em}
+
+\begin{document}
+
+{\LARGE \VAR{contact.name}} \\
+\VAR{contact.email} \textbar{} \VAR{contact.phone} \textbar{} \VAR{contact.location}
+\BLOCK{if contact.links}
+\\ \BLOCK{for link in contact.links}\VAR{link}\BLOCK{if not loop.last} \textbar{} \BLOCK{endif}\BLOCK{endfor}
+\BLOCK{endif}
+
+\VAR{date}
+
+Dear Hiring Manager,
+
+\BLOCK{for paragraph in paragraphs}
+\VAR{paragraph}
+
+\BLOCK{endfor}
+Sincerely, \\
+\VAR{contact.name}
+
+\end{document}

@@ -1,4 +1,5 @@
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -55,7 +56,7 @@ def _escape_context(value):
 def find_unmatched_entries(master_resume: dict, tailored_content: dict) -> list[str]:
     """Return labels for master experience/project entries with no tailored match.
 
-    `_merge_resume` keys tailored experience by exact `company` string and
+    `merge_resume` keys tailored experience by exact `company` string and
     tailored projects by exact `name` string, falling back to the master
     resume's original bullets when no match is found. That fallback is
     silent by construction, so this function exists to make the mismatch
@@ -75,7 +76,7 @@ def find_unmatched_entries(master_resume: dict, tailored_content: dict) -> list[
     return unmatched
 
 
-def _merge_resume(master_resume: dict, tailored_content: dict) -> dict:
+def merge_resume(master_resume: dict, tailored_content: dict) -> dict:
     tailored_by_company = {e["company"]: e for e in tailored_content.get("experience", [])}
     merged_experience = []
     for job in master_resume["experience"]:
@@ -102,26 +103,7 @@ def _merge_resume(master_resume: dict, tailored_content: dict) -> dict:
     }
 
 
-def render_resume(master_resume: dict, tailored_content: dict, output_dir: Path) -> tuple[Path, list[str]]:
-    """Render the tailored resume to PDF.
-
-    Returns a tuple of (pdf_path, unmatched_entries), where unmatched_entries
-    lists master experience/project entries whose tailored counterpart could
-    not be matched by exact `company`/`name` and therefore fell back to the
-    original, untailored bullets. Callers should surface a warning to the
-    user when this list is non-empty.
-    """
-    unmatched_entries = find_unmatched_entries(master_resume, tailored_content)
-    merged = _merge_resume(master_resume, tailored_content)
-    escaped = _escape_context(merged)
-
-    template = LATEX_JINJA_ENV.get_template("resume.tex")
-    tex_source = template.render(**escaped)
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    tex_path = output_dir / "resume.tex"
-    tex_path.write_text(tex_source, encoding="utf-8")
-
+def _compile_tex(tex_path: Path, output_dir: Path, output_stem: str) -> Path:
     result = subprocess.run(
         ["tectonic", "--outdir", str(output_dir), str(tex_path)],
         capture_output=True,
@@ -132,7 +114,50 @@ def render_resume(master_resume: dict, tailored_content: dict, output_dir: Path)
             f"Tectonic failed to compile {tex_path}:\n{result.stdout}\n{result.stderr}"
         )
 
-    pdf_path = output_dir / "resume.pdf"
+    pdf_path = output_dir / f"{output_stem}.pdf"
     if not pdf_path.exists():
         raise RenderError(f"Tectonic reported success but no PDF was produced at {pdf_path}")
+    return pdf_path
+
+
+def render_resume(master_resume: dict, tailored_content: dict, output_dir: Path) -> tuple[Path, list[str]]:
+    """Render the tailored resume to PDF.
+
+    Returns a tuple of (pdf_path, unmatched_entries), where unmatched_entries
+    lists master experience/project entries whose tailored counterpart could
+    not be matched by exact `company`/`name` and therefore fell back to the
+    original, untailored bullets. Callers should surface a warning to the
+    user when this list is non-empty.
+    """
+    unmatched_entries = find_unmatched_entries(master_resume, tailored_content)
+    merged = merge_resume(master_resume, tailored_content)
+    escaped = _escape_context(merged)
+
+    template = LATEX_JINJA_ENV.get_template("resume.tex")
+    tex_source = template.render(**escaped)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    tex_path = output_dir / "resume.tex"
+    tex_path.write_text(tex_source, encoding="utf-8")
+
+    pdf_path = _compile_tex(tex_path, output_dir, "resume")
     return pdf_path, unmatched_entries
+
+
+def render_cover_letter(resume_content: dict, cover_letter: dict, output_dir: Path) -> Path:
+    """Render a generated cover letter to PDF using the candidate's contact block."""
+    context = {
+        "contact": resume_content["contact"],
+        "date": datetime.now().strftime("%B %d, %Y"),
+        "paragraphs": cover_letter["paragraphs"],
+    }
+    escaped = _escape_context(context)
+
+    template = LATEX_JINJA_ENV.get_template("cover_letter.tex")
+    tex_source = template.render(**escaped)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    tex_path = output_dir / "cover_letter.tex"
+    tex_path.write_text(tex_source, encoding="utf-8")
+
+    return _compile_tex(tex_path, output_dir, "cover_letter")
