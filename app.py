@@ -103,6 +103,7 @@ def _run_tailor_action(client, master_resume: dict, gap_analysis: dict, run_dir)
     save_gap_analysis(run_dir, gap_analysis)
     st.session_state["tailored_content"] = tailored_content
     st.session_state["resume_pdf_path"] = pdf_path
+    st.session_state.pop("cover_letter_pdf_path", None)
 
     with st.spinner("Checking new keyword match..."):
         try:
@@ -132,6 +133,7 @@ def _run_use_original_action(master_resume: dict, run_dir):
     st.session_state["tailored_content"] = None
     st.session_state["resume_pdf_path"] = pdf_path
     st.session_state.pop("new_gap_analysis", None)
+    st.session_state.pop("cover_letter_pdf_path", None)
 
 
 def _run_cover_letter_action(client, master_resume: dict, run_dir):
