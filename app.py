@@ -122,7 +122,7 @@ def _run_tailor_action(client, master_resume: dict, gap_analysis: dict, run_dir)
     st.session_state["new_gap_analysis"] = new_gap_analysis
 
 
-def _run_use_original_action(master_resume: dict, run_dir):
+def _run_use_original_action(master_resume: dict, gap_analysis: dict, run_dir):
     passthrough = passthrough_tailored_content(master_resume)
     with st.spinner("Rendering PDF..."):
         try:
@@ -130,6 +130,7 @@ def _run_use_original_action(master_resume: dict, run_dir):
         except RenderError as e:
             st.error(f"PDF rendering failed:\n\n{e}")
             return
+    save_gap_analysis(run_dir, gap_analysis)
     st.session_state["tailored_content"] = None
     st.session_state["resume_pdf_path"] = pdf_path
     st.session_state.pop("new_gap_analysis", None)
@@ -177,6 +178,7 @@ def tailoring_flow(master_resume: dict):
     job_description = st.text_area("Paste the job description", height=300)
     company = st.text_input("Company name (for the archive folder)")
     model = st.selectbox("Model", ["claude-sonnet-5", "claude-opus-4-8"], index=0)
+    st.session_state["model"] = model
 
     if st.button("Analyze job description"):
         if len(job_description.strip()) < 100:
@@ -240,7 +242,7 @@ def tailoring_flow(master_resume: dict):
         _run_tailor_action(client, master_resume, gap_analysis, run_dir)
 
     if use_original_clicked:
-        _run_use_original_action(master_resume, run_dir)
+        _run_use_original_action(master_resume, gap_analysis, run_dir)
 
     if cover_letter_clicked:
         _run_cover_letter_action(client, master_resume, run_dir)
