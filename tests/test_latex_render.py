@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from core.latex_render import RenderError, escape_latex, find_unmatched_entries, render_resume
+from core.latex_render import RenderError, escape_latex, find_unmatched_entries, render_cover_letter, render_resume
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 MASTER_RESUME = json.loads((FIXTURES_DIR / "master_resume.json").read_text())
@@ -95,3 +95,22 @@ def test_render_resume_surfaces_unmatched_entries_and_falls_back_to_master_bulle
 
     assert pdf_path.exists()
     assert unmatched_entries == ["experience: Northwind Data", "project: queue-bench"]
+
+
+COVER_LETTER_CONTENT = {
+    "paragraphs": [
+        "I am excited to apply for the Senior Backend Engineer role at Northwind Data.",
+        "In my current role I rebuilt the ingestion pipeline in Go, cutting processing "
+        "latency from 40 minutes to 6 minutes, which directly matches the scale "
+        "problems described in your posting.",
+        "I would welcome the opportunity to bring this experience to your team.",
+    ]
+}
+
+
+def test_render_cover_letter_produces_pdf(tmp_path):
+    pdf_path = render_cover_letter(MASTER_RESUME, COVER_LETTER_CONTENT, tmp_path)
+
+    assert pdf_path == tmp_path / "cover_letter.pdf"
+    assert pdf_path.exists()
+    assert pdf_path.stat().st_size > 0
